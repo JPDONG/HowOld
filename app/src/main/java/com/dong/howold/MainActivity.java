@@ -14,6 +14,7 @@ import android.provider.MediaStore;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.text.TextUtils;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
@@ -59,6 +60,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
         mDetectImage = (Button) findViewById(R.id.id_detectImage);
         mSelectImage = (Button) findViewById(R.id.id_selectImage);
         mTip = (TextView) findViewById(R.id.id_tip);
+        mShowProcessBar = findViewById(R.id.id_frameLayout);
     }
 
     private static final int MSG_SUCCESS = 1;
@@ -69,13 +71,13 @@ public class MainActivity extends Activity implements View.OnClickListener {
         public void handleMessage(Message msg) {
             switch (msg.what){
                 case MSG_SUCCESS:
-                    //mShowProcessBar.setVisibility(View.GONE);
+                    mShowProcessBar.setVisibility(View.GONE);
                     JSONObject jso = (JSONObject) msg.obj;
                     prePareBitmap(jso);
                     mPhoto.setImageBitmap(mPhotoImage);
                     break;
                 case MSG_ERROR:
-                    //mShowProcessBar.setVisibility(View.GONE);
+                    mShowProcessBar.setVisibility(View.GONE);
                     String errorMessage = (String) msg.obj;
                     if(TextUtils.isEmpty(errorMessage)){
                         mTip.setText("error");
@@ -111,12 +113,53 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 mPaint.setColor(0xffffffff);
                 mPaint.setStrokeWidth(2);
                 canvas.drawLine(x - w/2,y - h/2,x - w/2,y + h/2,mPaint);
+                canvas.drawLine(x - w/2,y - h/2,x + w/2,y - h/2,mPaint);
+                canvas.drawLine(x + w/2,y - h/2,x + w/2,y + h/2,mPaint);
+                canvas.drawLine(x - w/2,y + h/2,x + w/2,y + h/2,mPaint);
+                int age = face.getJSONObject("attribute").getJSONObject("age").getInt("value");
+                String gender = face.getJSONObject("attribute").getJSONObject("gender").getString("value");
+                Bitmap ageBitmap = buildAgeBitmap(age, "Male".equals(gender));
+                int ageWidth = ageBitmap.getWidth();
+                int ageHeight = ageBitmap.getHeight();
+                Log.e("agewidth","age" + ageWidth + "w=" + w + "h=" + h);
+                Log.e("ageheight","age"+ageHeight);
+                if((bitmap.getWidth() < mPhoto.getWidth()) && (bitmap.getHeight() < mPhoto.getHeight())){
+                    float ratio = Math.max(bitmap.getWidth() * 1.0f / mPhoto.getWidth(),
+                            bitmap.getHeight() * 1.0f / mPhoto.getHeight());
+                    Log.e("Ratio","ratio="+ratio);
+                    Log.e("Ratio","ratio="+(int)(ageWidth * ratio));
+                    ageBitmap = Bitmap.createScaledBitmap(ageBitmap,
+                            (int)(ageWidth * ratio), (int)(ageHeight * ratio), true);
+                }
+                Log.e("agewidth","age"+ageBitmap.getWidth());
+                Log.e("ageheight","age"+ageBitmap.getHeight());
+
+                canvas.drawBitmap(ageBitmap, x - ageBitmap.getWidth() / 2, y - h / 2 - ageBitmap.getHeight(), null);
+
                 mPhotoImage = bitmap;
             }
         } catch (JSONException e) {
             e.printStackTrace();
         }
 
+    }
+
+    private Bitmap buildAgeBitmap(int age, boolean isMale) {
+        TextView tv = (TextView)mShowProcessBar.findViewById(R.id.id_ageAndGender);
+
+        if(isMale){
+            //tv.setCompoundDrawablesWithIntrinsicBounds(
+             //       getResources().getDrawable(R.drawable.male),null,null,null);
+            tv.setText("男" + age);
+        }else{
+            //tv.setCompoundDrawablesWithIntrinsicBounds(
+             //       getResources().getDrawable(R.drawable.female),null,null,null);
+            tv.setText("女" + age);
+        }
+        tv.setDrawingCacheEnabled(true);
+        Bitmap bitmap = Bitmap.createBitmap(tv.getDrawingCache());
+        tv.destroyDrawingCache();
+        return bitmap;
     }
 
 
@@ -129,7 +172,12 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 startActivityForResult(intent,1);
                 break;
             case R.id.id_detectImage:
-                //mShowProcessBar.setVisibility(View.VISIBLE);
+                mShowProcessBar.setVisibility(View.VISIBLE);
+                if(mCurrentPhotoStr != null && !mCurrentPhotoStr.trim().equals("")) {
+                    reSizePhoto();
+                }else{
+                    mPhotoImage = BitmapFactory.decodeResource(getResources(),R.drawable.t4);
+                }
                 FaceDetect.detect(mPhotoImage, new FaceDetect.CallBack() {
                     @Override
                     public void success(JSONObject result) {
